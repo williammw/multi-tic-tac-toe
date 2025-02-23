@@ -232,7 +232,7 @@ export default function Board({
           )}
         </AnimatePresence>
       </div>
-
+ 
       {/* Game Board */}
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
