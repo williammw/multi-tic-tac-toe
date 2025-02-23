@@ -25,7 +25,7 @@ export default function Board() {
   });
 
   useEffect(() => {
-    const newSocket = io('http://localhost:3000');
+    const newSocket = io(import.meta.env.VITE_BACKEND_URL);
     
     newSocket.on('connect', () => {
       console.log('Connected to server');
