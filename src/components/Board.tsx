@@ -1,16 +1,4 @@
-  // Function to emit player leaving intentionally
-  const handleIntentionalLeave = () => {
-    if (!socket || !roomId) return;
-    socket.emit('leave-game', { roomId, intentional: true });
-    handleLeaveGame();
-  };
-
-  const handleLeaveGameClick = () => {
-    const confirmed = window.confirm('Are you sure you want to leave the game? All progress will be lost!');
-    if (confirmed) {
-      handleIntentionalLeave();
-    }
-  };import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BoardState, Cell, Player, defaultGameState } from '../types/game';
@@ -52,6 +40,20 @@ export default function Board({
   const opponent = players && socket 
     ? players.find(([id]) => id !== socket.id)?.[1] 
     : null;
+
+  // Function to emit player leaving intentionally
+  const handleIntentionalLeave = () => {
+    if (!socket || !roomId) return;
+    socket.emit('leave-game', { roomId, intentional: true });
+    handleLeaveGame();
+  };
+
+  const handleLeaveGameClick = () => {
+    const confirmed = window.confirm('Are you sure you want to leave the game? All progress will be lost!');
+    if (confirmed) {
+      handleIntentionalLeave();
+    }
+  };
 
   useEffect(() => {
     if (!socket) return;
@@ -261,6 +263,7 @@ export default function Board({
           )}
         </AnimatePresence>
       </div>
+      
       {/* Players Info */}
       <div className="grid grid-cols-2 gap-8 w-full max-w-xl">
         {players && players.length > 0 ? (
@@ -307,7 +310,7 @@ export default function Board({
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+    </div>
  
       {/* Game Board */}
       <motion.div 
