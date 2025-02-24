@@ -246,11 +246,21 @@ export default function Board({
 
   return (
     <div className="flex flex-col items-center gap-8">
-      {playerSymbol && playerSymbol !== boardState.currentPlayer && !boardState.gameOver && (
-        <div className="text-xl text-blue-600 animate-pulse">
-          Waiting for opponent's move...
-        </div>
-      )}
+      {/* Turn Indicator */}
+      <div className="h-8 flex items-center justify-center">
+        <AnimatePresence mode="wait">
+          {playerSymbol && playerSymbol !== boardState.currentPlayer && !boardState.gameOver && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="text-xl text-blue-600 animate-pulse"
+            >
+              Waiting for opponent's move...
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
       {/* Players Info */}
       <div className="grid grid-cols-2 gap-8 w-full max-w-xl">
         {players && players.length > 0 ? (
