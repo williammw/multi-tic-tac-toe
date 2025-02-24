@@ -1,3 +1,4 @@
+// src/components/AuthButton.tsx (modified)
 import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { useAuth } from '../lib/auth-context';
@@ -14,10 +15,12 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Settings, LogOut, User, Chrome } from "lucide-react";
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function AuthButton() {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleSignIn = async () => {
     setIsLoading(true);
@@ -34,6 +37,8 @@ export default function AuthButton() {
   const handleSignOut = async () => {
     try {
       await signOut(auth);
+      // Redirect to home page after sign out
+      navigate('/');
     } catch (error) {
       console.error('Error signing out:', error);
     }
@@ -77,13 +82,13 @@ export default function AuthButton() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate('/profile')}>
             <User className="mr-2 h-4 w-4" />
             <span>Profile</span>
           </DropdownMenuItem>
-          <DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate('/stats')}>
             <Settings className="mr-2 h-4 w-4" />
-            <span>Settings</span>
+            <span>Stats</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

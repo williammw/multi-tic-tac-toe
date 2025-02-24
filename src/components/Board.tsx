@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { BoardState, Cell, Player, defaultGameState } from '../types/game';
 import { toast } from 'react-hot-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useAuth } from '../lib/auth-context';
+import { updateUserStatsAfterGame } from '../lib/level-service';
 
 interface BoardProps {
   socket: Socket | null;
@@ -32,6 +34,7 @@ export default function Board({
     return null;
   });
   
+  const { user } = useAuth();
   const currentPlayerData = players && socket 
     ? players.find(([id]) => id === socket.id)?.[1] 
     : null;
@@ -40,6 +43,56 @@ export default function Board({
   const opponent = players && socket 
     ? players.find(([id]) => id !== socket.id)?.[1] 
     : null;
+
+  useEffect(() => {
+    if (!user || !boardState.gameOver) return;
+    
+    // Only update stats when the game is actually over
+    if (boardState.gameOver) {
+      let gameResult: 'win' | 'loss' | 'draw' = 'loss';
+      
+      // It's a draw if there's no winner
+      if (!boardState.winner) {
+        gameResult = 'draw';
+      } 
+      // It's a win if the current player's symbol matches the winner
+      else if (playerSymbol === boardState.winner) {
+        gameResult = 'win';
+      }
+      
+      // Update the stats in Firestore
+      updateUserStatsAfterGame(user.uid, gameResult)
+        .then(result => {
+          // Show toast notification for XP gain
+          toast.custom(
+            <Alert variant="default" className="bg-blue-500 text-white border-none">
+              <AlertDescription>
+                {gameResult === 'win' 
+                  ? '🏆 Victory! +30 XP' 
+                  : gameResult === 'draw' 
+                    ? '🤝 Draw! +10 XP' 
+                    : '💪 Good effort! +5 XP'}
+              </AlertDescription>
+            </Alert>
+          );
+          
+          // If leveled up, show a more prominent notification
+          if (result.leveledUp && result.newLevel) {
+            setTimeout(() => {
+              toast.custom(
+                <Alert variant="default" className="bg-purple-600 text-white border-none animate-bounce">
+                  <AlertDescription className="flex flex-col items-center">
+                    <span className="text-xl">🎉 LEVEL UP! 🎉</span>
+                    <span>You've reached level {result.newLevel}!</span>
+                  </AlertDescription>
+                </Alert>
+              );
+            }, 1000); // Show after the XP notification
+          }
+        })
+        .catch(error => console.error("Error updating stats:", error));
+    }
+  }, [boardState.gameOver, boardState.winner, playerSymbol, user]);
 
   // Function to emit player leaving intentionally
   const handleIntentionalLeave = () => {
