@@ -1,20 +1,36 @@
-import { useState, useEffect } from 'react';
+  // Function to emit player leaving intentionally
+  const handleIntentionalLeave = () => {
+    if (!socket || !roomId) return;
+    socket.emit('leave-game', { roomId, intentional: true });
+    handleLeaveGame();
+  };
+
+  const handleLeaveGameClick = () => {
+    const confirmed = window.confirm('Are you sure you want to leave the game? All progress will be lost!');
+    if (confirmed) {
+      handleIntentionalLeave();
+    }
+  };import { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BoardState, Cell, Player, defaultGameState } from '../types/game';
+import { toast } from 'react-hot-toast';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface BoardProps {
   socket: Socket | null;
   initialGameState?: BoardState;
   players?: [string, Player][];
   onGameEnd: () => void;
+  onPlayersUpdate?: (players: [string, Player][]) => void;
 }
 
 export default function Board({ 
   socket, 
   initialGameState = defaultGameState,
   players = [],
-  onGameEnd 
+  onGameEnd,
+  onPlayersUpdate 
 }: BoardProps) {
   const [boardState, setBoardState] = useState<BoardState>(initialGameState);
   const [showCongrats, setShowCongrats] = useState(false);
@@ -54,8 +70,58 @@ export default function Board({
       }
     });
 
-    socket.on('player-left', ({ gameState }) => {
-      setBoardState(gameState);
+    socket.on('player-left', ({ gameState, remainingPlayers, gameStatus, reason, playerId, leftPlayer, remainingPlayer, intentional }) => {
+      console.log('Player Left Event:', {
+        gameState,
+        remainingPlayers,
+        gameStatus,
+        reason,
+        playerId,
+        leftPlayer,
+        remainingPlayer,
+        intentional,
+        'currentSocket.id': socket?.id,
+        playerSymbol,
+        currentGameState: boardState
+      });
+      
+      // Update the list of players
+      if (onPlayersUpdate && remainingPlayers) {
+        onPlayersUpdate(remainingPlayers);
+      }
+
+      // Find if current player is the one who stayed
+      const isCurrentPlayerRemaining = socket?.id && socket.id !== playerId;
+      console.log('Is Current Player Remaining:', isCurrentPlayerRemaining);
+      
+      if (gameStatus === 'playing' && isCurrentPlayerRemaining) {
+        console.log('Current player is winner, updating state');
+        setBoardState(gameState); // Use the gameState from the server
+        setShowCongrats(true);
+        setTimeout(() => setShowCongrats(false), 3000);
+        
+        // Show notification based on how opponent left
+        if (intentional) {
+          toast.custom(
+            <Alert variant="default" className="bg-yellow-500 text-white border-none">
+              <AlertDescription>
+                Your opponent has left the game. You win! 👋
+              </AlertDescription>
+            </Alert>
+          );
+        } else {
+          toast.custom(
+            <Alert variant="default" className="bg-red-500 text-white border-none">
+              <AlertDescription>
+                Your opponent disconnected. You win! 🔌
+              </AlertDescription>
+            </Alert>
+          );
+        }
+      } else if (!isCurrentPlayerRemaining) {
+        console.log('Current player left, handling game leave');
+        handleLeaveGame();
+      }
     });
 
     socket.on('rematch-requested', (requesterId: string) => {
@@ -307,7 +373,7 @@ export default function Board({
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           className="bg-gray-500 text-white px-6 py-3 rounded-lg"
-          onClick={handleLeaveGame}
+          onClick={handleLeaveGameClick}
         >
           Leave Game
         </motion.button>

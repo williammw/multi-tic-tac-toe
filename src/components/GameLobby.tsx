@@ -31,9 +31,34 @@ export default function GameLobby({ socket, onGameStart }: GameLobbyProps) {
       onGameStart(gameState, players);
     });
 
-    socket.on('player-left', ({ playerId }) => {
-      setRoomPlayers(prev => prev.filter(([id]) => id !== playerId));
-      setError('Opponent has left the game');
+    socket.on('player-left', ({ playerId, reason, gameStatus, remainingPlayers, leftPlayer, remainingPlayer }) => {
+      console.log('GameLobby - Player Left Event:', {
+        playerId,
+        reason,
+        gameStatus,
+        remainingPlayers,
+        leftPlayer,
+        remainingPlayer,
+        'currentSocket.id': socket?.id,
+        currentRoomPlayers: roomPlayers
+      });
+
+      setRoomPlayers(prev => {
+        const newPlayers = prev.filter(([id]) => id !== playerId);
+        console.log('Updated room players:', newPlayers);
+        return newPlayers;
+      });
+      
+      if (reason === 'disconnect') {
+        if (gameStatus === 'playing') {
+          console.log('Player left during game');
+          setError('Opponent disconnected. You win!');
+        } else {
+          console.log('Player left from lobby');
+          setError('Opponent has left the game');
+        }
+        setIsWaiting(false);
+      }
     });
 
     return () => {
