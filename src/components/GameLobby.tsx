@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Player } from '../types/game';
+import { useAuth } from '../lib/auth-context';
 
 interface GameLobbyProps {
   socket: Socket | null;
@@ -9,10 +10,17 @@ interface GameLobbyProps {
 }
 
 export default function GameLobby({ socket, onGameStart }: GameLobbyProps) {
+  const { user } = useAuth();
   const [playerName, setPlayerName] = useState('');
   const [isWaiting, setIsWaiting] = useState(false);
   const [roomPlayers, setRoomPlayers] = useState<[string, Player][]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.displayName) {
+      setPlayerName(user.displayName);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!socket) return;
@@ -79,6 +87,7 @@ export default function GameLobby({ socket, onGameStart }: GameLobbyProps) {
 
     socket.emit('join-matchmaking', {
       name: playerName.trim(),
+      avatar: user?.photoURL || undefined,
     });
   };
 
@@ -103,6 +112,7 @@ export default function GameLobby({ socket, onGameStart }: GameLobbyProps) {
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
               placeholder="Enter your name"
               maxLength={20}
+              disabled={!!user}
             />
           </div>
 
@@ -156,8 +166,16 @@ export default function GameLobby({ socket, onGameStart }: GameLobbyProps) {
                 animate={{ opacity: 1, x: 0 }}
                 className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg"
               >
-                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                  {player.avatar || player.name[0].toUpperCase()}
+                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
+                  {player.avatar ? (
+                    <img 
+                      src={player.avatar} 
+                      alt={`${player.name}'s avatar`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>{player.name[0].toUpperCase()}</span>
+                  )}
                 </div>
                 <div>
                   <p className="font-medium">{player.name}</p>

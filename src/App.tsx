@@ -4,6 +4,8 @@ import { Toaster } from 'react-hot-toast';
 import Board from './components/Board';
 import GameLobby from './components/GameLobby';
 import { BoardState, Player, defaultGameState } from './types/game';
+import { AuthProvider } from './lib/auth-context';
+import AuthButton from './components/AuthButton';
 
 export default function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -49,7 +51,7 @@ export default function App() {
   };
 
   return (
-    <>
+    <AuthProvider>
       <Toaster
         position="top-right"
         toastOptions={{
@@ -62,23 +64,26 @@ export default function App() {
         }}
       />
       <div className="max-w-3xl mx-auto p-8">
-      <h1 className="text-4xl text-gray-800 mb-4 text-center">Multiplayer Tic-Tac-Toe</h1>
-      <p className="text-lg text-gray-600 mb-8 text-center">
-        Each player can place up to 3 marks. When placing a 4th mark, the oldest one is removed.
-      </p>
-      
-      {!gameStarted ? (
-        <GameLobby socket={socket} onGameStart={handleGameStart} />
-      ) : (
-        <Board
-          socket={socket}
-          initialGameState={gameState}
-          players={players}
-          onGameEnd={handleGameEnd}
-          onPlayersUpdate={setPlayers}
-        />
-      )}
-    </div>
-    </>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-4xl text-gray-800">Multiplayer Tic-Tac-Toe</h1>
+          <AuthButton />
+        </div>
+        <p className="text-lg text-gray-600 mb-8 text-center">
+          Each player can place up to 3 marks. When placing a 4th mark, the oldest one is removed.
+        </p>
+        
+        {!gameStarted ? (
+          <GameLobby socket={socket} onGameStart={handleGameStart} />
+        ) : (
+          <Board
+            socket={socket}
+            initialGameState={gameState}
+            players={players}
+            onGameEnd={handleGameEnd}
+            onPlayersUpdate={setPlayers}
+          />
+        )}
+      </div>
+    </AuthProvider>
   );
 }

@@ -279,8 +279,16 @@ export default function Board({
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                  {player.avatar || player.name[0].toUpperCase()}
+                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
+                  {player.avatar ? (
+                    <img 
+                      src={player.avatar} 
+                      alt={`${player.name}'s avatar`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>{player.name[0].toUpperCase()}</span>
+                  )}
                 </div>
                 <div>
                   <p className="font-medium">{player.name}</p>
