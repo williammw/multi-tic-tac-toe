@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Player } from '../types/game';
+import { Player, BoardState } from '../types/game';
 import { useAuth } from '../lib/auth-context';
 
 interface GameLobbyProps {
   socket: Socket | null;
-  onGameStart: (gameState: any, players: [string, Player][]) => void;
+  onGameStart: (gameState: BoardState, players: [string, Player][]) => void;
 }
 
 export default function GameLobby({ socket, onGameStart }: GameLobbyProps) {
@@ -132,7 +132,7 @@ export default function GameLobby({ socket, onGameStart }: GameLobbyProps) {
             className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600"
             onClick={handleJoinGame}
           >
-            Join Game
+            {user ? "Join Game" : "Play as Guest"}
           </motion.button>
         </div>
       )}
