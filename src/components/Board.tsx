@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BoardState, Cell, Player, defaultGameState } from '../types/game';
 import { toast } from 'react-hot-toast';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import { useAuth } from '../lib/auth-context';
 import { updateUserStatsAfterGame } from '../lib/level-service';
 
@@ -25,6 +25,17 @@ export default function Board({
   const [boardState, setBoardState] = useState<BoardState>(initialGameState);
   const [showCongrats, setShowCongrats] = useState(false);
   const [rematchRequested, setRematchRequested] = useState<string | null>(null);
+  const [coinTossing, setCoinTossing] = useState(false);
+  const [coinResult, setCoinResult] = useState<string | null>(null);
+  const [startingPlayerName, setStartingPlayerName] = useState<string | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number>(10);
+  const [isTimerActive, setIsTimerActive] = useState(false);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [lastAutoMove, setLastAutoMove] = useState<{
+    player: Player;
+    row: number;
+    col: number;
+  } | null>(null);
   const [roomId, setRoomId] = useState<string | null>(() => {
     const savedGame = localStorage.getItem('gameRoom');
     if (savedGame) {
@@ -39,10 +50,6 @@ export default function Board({
     ? players.find(([id]) => id === socket.id)?.[1] 
     : null;
   const playerSymbol = currentPlayerData?.symbol;
-
-  const opponent = players && socket 
-    ? players.find(([id]) => id !== socket.id)?.[1] 
-    : null;
 
   useEffect(() => {
     if (!user || !boardState.gameOver) return;
@@ -117,10 +124,86 @@ export default function Board({
       setRoomId(savedRoomId);
     }
 
+    socket.on('coin-toss', ({ result, startingPlayer }) => {
+      setCoinTossing(true);
+      
+      // Simulate coin toss animation
+      setTimeout(() => {
+        setCoinResult(result);
+        setStartingPlayerName(startingPlayer?.name || result);
+        
+        // Hide coin toss after a delay
+        setTimeout(() => {
+          setCoinTossing(false);
+          setCoinResult(null);
+          setStartingPlayerName(null);
+        }, 3000);
+      }, 2000);
+    });
+
+    socket.on('turn-timer-start', ({ startTime, duration }) => {
+      // Calculate when the turn will end
+      const endTime = startTime + duration;
+      
+      // Initialize the time remaining
+      const currentTime = Date.now();
+      const remaining = Math.max(0, Math.floor((endTime - currentTime) / 1000));
+      setTimeRemaining(remaining);
+      
+      // Start the countdown
+      setIsTimerActive(true);
+      
+      // Clear any existing interval
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+      
+      // Set up a new interval for the countdown
+      timerIntervalRef.current = setInterval(() => {
+        const now = Date.now();
+        const secondsLeft = Math.max(0, Math.floor((endTime - now) / 1000));
+        
+        setTimeRemaining(secondsLeft);
+        
+        // Stop the timer if time has run out
+        if (secondsLeft <= 0) {
+          setIsTimerActive(false);
+          if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
+          }
+        }
+      }, 1000);
+    });
+
+    socket.on('auto-move', ({ player, row, col, reason }) => {
+      setLastAutoMove({ player, row, col });
+      
+      if (reason === 'timeout') {
+        toast.custom(
+          <Alert variant="default" className="bg-orange-500 text-white border-none">
+            <AlertDescription>
+              {player.name} ran out of time! A random move was made.
+            </AlertDescription>
+          </Alert>
+        );
+      }
+      
+      // Clear the notification after a delay
+      setTimeout(() => {
+        setLastAutoMove(null);
+      }, 3000);
+    });
+
     socket.on('game-state', (newState: BoardState) => {
       setBoardState(newState);
       if (newState.winner) {
         setShowCongrats(true);
+        setIsTimerActive(false);
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
         setTimeout(() => setShowCongrats(false), 3000);
       }
     });
@@ -190,10 +273,16 @@ export default function Board({
     });
 
     return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
       socket.off('game-state');
       socket.off('player-left');
       socket.off('rematch-requested');
       socket.off('game-start');
+      socket.off('coin-toss');
+      socket.off('turn-timer-start');
+      socket.off('auto-move');
     };
   }, [socket]);
 
@@ -301,6 +390,80 @@ export default function Board({
 
   return (
     <div className="flex flex-col items-center gap-8">
+      {/* Coin Toss Animation */}
+      <AnimatePresence>
+        {coinTossing && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            className="fixed top-0 left-0 w-full h-full flex items-center justify-center bg-black bg-opacity-60 z-50"
+          >
+            <div className="bg-white p-6 rounded-xl shadow-lg flex flex-col items-center">
+              {!coinResult ? (
+                <>
+                  <motion.div
+                    animate={{ rotateY: [0, 1080], rotateX: [0, 720] }}
+                    transition={{ duration: 2, ease: "easeInOut" }}
+                    className="w-20 h-20 bg-yellow-400 rounded-full mb-4 flex items-center justify-center text-2xl"
+                  >
+                    🪙
+                  </motion.div>
+                  <p className="text-xl font-bold">Tossing coin...</p>
+                </>
+              ) : (
+                <>
+                  <div className="w-20 h-20 bg-yellow-400 rounded-full mb-4 flex items-center justify-center text-2xl">
+                    {coinResult === 'X' ? 'X' : 'O'}
+                  </div>
+                  <p className="text-xl font-bold">{startingPlayerName} goes first!</p>
+                </>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Turn Timer */}
+      <div className="h-8 flex items-center justify-center">
+        <AnimatePresence mode="wait">
+          {isTimerActive && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className={`text-xl font-bold ${
+                timeRemaining <= 2 
+                  ? 'text-red-600 animate-pulse' 
+                  : timeRemaining <= 4 
+                    ? 'text-orange-500' 
+                    : 'text-blue-600'
+              }`}
+            >
+              Time remaining: {timeRemaining}s
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Auto Move Notification */}
+      <AnimatePresence>
+        {lastAutoMove && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="bg-orange-100 border-orange-400 border p-2 rounded-md text-center"
+          >
+            <p>
+              {lastAutoMove.player.name} ran out of time! 
+              <br />
+              A random move was made at position ({lastAutoMove.row + 1}, {lastAutoMove.col + 1}).
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Turn Indicator */}
       <div className="h-8 flex items-center justify-center">
         <AnimatePresence mode="wait">
@@ -346,6 +509,25 @@ export default function Board({
                 <div>
                   <p className="font-medium">{player.name}</p>
                   <p className="text-sm text-gray-500">Playing as {player.symbol}</p>
+                  
+                  {/* Add timer indicator for current player */}
+                  {boardState.currentPlayer === player.symbol && isTimerActive && (
+                    <div className="mt-1 bg-gray-200 h-2 rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: '100%' }}
+                        animate={{ 
+                          width: `${(timeRemaining / 10) * 100}%`,
+                          backgroundColor: timeRemaining <= 2 
+                            ? '#ef4444' // red-500
+                            : timeRemaining <= 4 
+                              ? '#f97316' // orange-500 
+                              : '#3b82f6' // blue-500
+                        }}
+                        transition={{ duration: 1 }}
+                        className="h-full"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -367,7 +549,7 @@ export default function Board({
               exit={{ opacity: 0, scale: 0.5 }}
               className="text-3xl text-green-500 text-center"
             >
-              🎉 {players?.find(([_, p]) => p.symbol === boardState.winner)?.[1]?.name || boardState.winner} wins! 🎉
+              🎉 {players?.find(([, p]) => p.symbol === boardState.winner)?.[1]?.name || boardState.winner} wins! 🎉
             </motion.div>
           )}
         </AnimatePresence>
