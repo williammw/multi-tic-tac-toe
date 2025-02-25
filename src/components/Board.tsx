@@ -535,11 +535,11 @@ export default function Board({
   return (
     <div className="flex flex-col items-center gap-8">
       {/* Connection error alert */}
-      {connectionError && (
+      {/* {connectionError && (
         <Alert variant="destructive" className="mb-4">
           <AlertDescription>{connectionError}</AlertDescription>
         </Alert>
-      )}
+      )} */}
       
       {/* Coin Toss Animation */}
       <AnimatePresence>

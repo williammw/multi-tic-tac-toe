@@ -22,7 +22,7 @@ export function Alert({ variant = 'default', className = '', children }: AlertPr
 export function AlertDescription({ className = '', children }: AlertDescriptionProps) {
   return (
     <div className={`text-sm [&_p]:leading-relaxed ${className}`}>
-      {children}
+      {children} 
     </div>
   );
 }
