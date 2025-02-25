@@ -57,7 +57,7 @@ export default function UserStatsCard() {
               <X className="h-4 w-4 text-red-500" />
               <span className="text-sm font-medium">Losses</span>
             </div>
-            <p className="text-2xl font-bold mt-1">{statistics.losses}</p>
+            <p className="text-2xl font-bold mt-1">{statistics.losss}</p>
           </div>
           
           <div className="bg-gray-50 p-3 rounded-lg">
