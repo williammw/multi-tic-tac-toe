@@ -44,12 +44,42 @@ export default function Board({
     }
     return null;
   });
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   
   const { user } = useAuth();
   const currentPlayerData = players && socket 
     ? players.find(([id]) => id === socket.id)?.[1] 
     : null;
   const playerSymbol = currentPlayerData?.symbol;
+
+  // Handle reconnection with authentication when socket or user changes
+  useEffect(() => {
+    // Skip if we don't have both socket and roomId
+    if (!socket || !roomId) return;
+    
+    const reconnectWithAuth = async () => {
+      try {
+        // Get auth token if user is signed in
+        let token = null;
+        if (user) {
+          token = await user.getIdToken();
+        }
+        
+        // Reconnect to the game with token
+        const savedGame = localStorage.getItem('gameRoom');
+        if (savedGame) {
+          const { playerSymbol } = JSON.parse(savedGame);
+          socket.emit('reconnect-game', { roomId, playerSymbol, token });
+          console.log('Attempting to reconnect to game with authentication');
+        }
+      } catch (error) {
+        console.error('Failed to reconnect with authentication:', error);
+        setConnectionError('Failed to authenticate. Please try rejoining the game.');
+      }
+    };
+    
+    reconnectWithAuth();
+  }, [socket, user, roomId]);
 
   useEffect(() => {
     if (!user || !boardState.gameOver) return;
@@ -101,10 +131,21 @@ export default function Board({
     }
   }, [boardState.gameOver, boardState.winner, playerSymbol, user]);
 
-  // Function to emit player leaving intentionally
-  const handleIntentionalLeave = () => {
+  // Function to emit player leaving intentionally with authentication
+  const handleIntentionalLeave = async () => {
     if (!socket || !roomId) return;
-    socket.emit('leave-game', { roomId, intentional: true });
+    
+    // If user is authenticated, get a fresh token
+    let token = null;
+    if (user) {
+      try {
+        token = await user.getIdToken();
+      } catch (err) {
+        console.error('Error refreshing token for leave game:', err);
+      }
+    }
+    
+    socket.emit('leave-game', { roomId, intentional: true, token });
     handleLeaveGame();
   };
 
@@ -113,6 +154,11 @@ export default function Board({
     if (confirmed) {
       handleIntentionalLeave();
     }
+  };
+
+  const handleLeaveGame = () => {
+    localStorage.removeItem('gameRoom');
+    onGameEnd();
   };
 
   useEffect(() => {
@@ -207,6 +253,11 @@ export default function Board({
         setTimeout(() => setShowCongrats(false), 3000);
       }
     });
+    
+    socket.on('error', (errorMessage: string) => {
+      setConnectionError(errorMessage);
+      toast.error(errorMessage);
+    });
 
     socket.on('player-left', ({ gameState, remainingPlayers, gameStatus, reason, playerId, leftPlayer, remainingPlayer, intentional }) => {
       console.log('Player Left Event:', {
@@ -283,8 +334,9 @@ export default function Board({
       socket.off('coin-toss');
       socket.off('turn-timer-start');
       socket.off('auto-move');
+      socket.off('error');
     };
-  }, [socket]);
+  }, [socket, onPlayersUpdate]);
 
   const countPlayerMarks = (symbol: string): number => {
     return boardState.cells.flat().filter(cell => cell.value === symbol).length;
@@ -330,7 +382,8 @@ export default function Board({
     return null;
   };
 
-  const handleClick = (row: number, col: number) => {
+  // Handle game clicks with proper validation
+  const handleClick = async (row: number, col: number) => {
     if (!socket || !playerSymbol || !roomId) {
       console.log('Click blocked: No socket, symbol, or room', { socket: !!socket, playerSymbol, roomId });
       return;
@@ -349,9 +402,11 @@ export default function Board({
       return;
     }
 
-    const newCells = [...boardState.cells.map(row => [...row])];
+    // Create a deep copy of the cells array
+    const newCells = boardState.cells.map(r => r.map(c => ({ ...c })));
     const currentMarks = countPlayerMarks(playerSymbol);
 
+    // If player already has 3 marks, remove oldest
     if (currentMarks >= 3) {
       const oldestMark = getOldestMark(playerSymbol);
       if (oldestMark) {
@@ -359,37 +414,82 @@ export default function Board({
       }
     }
 
+    // Add new mark
     newCells[row][col] = { value: playerSymbol, timestamp: Date.now() };
     
+    // Check for winner
     const winner = checkWinner(newCells);
-    // Don't switch the current player yet - the server will do that
+    
+    // Create new state (server will handle switching current player)
     const newState = {
       cells: newCells,
-      currentPlayer: boardState.currentPlayer, // Keep the current player the same
+      currentPlayer: boardState.currentPlayer, // Keep the same, server will change
       gameOver: !!winner,
       winner
     };
 
-    socket.emit('make-move', { roomId, move: newState });
+    // Send move to server with authentication if available
+    let authToken = null;
+    if (user) {
+      try {
+        authToken = await user.getIdToken(true); // Force token refresh
+        socket.emit('make-move', { roomId, move: newState, token: authToken });
+      } catch (err) {
+        console.error('Error getting auth token for move:', err);
+        socket.emit('make-move', { roomId, move: newState });
+      }
+    } else {
+      socket.emit('make-move', { roomId, move: newState });
+    }
   };
 
-  const handleRematchRequest = () => {
+  // Request a rematch with authentication
+  const handleRematchRequest = async () => {
     if (!socket || !roomId) return;
-    socket.emit('request-rematch', roomId);
+    
+    // Include auth token if available
+    let authToken = null;
+    if (user) {
+      try {
+        authToken = await user.getIdToken(true);
+        socket.emit('request-rematch', roomId, authToken);
+      } catch (err) {
+        console.error('Error getting auth token for rematch request:', err);
+        socket.emit('request-rematch', roomId);
+      }
+    } else {
+      socket.emit('request-rematch', roomId);
+    }
   };
 
-  const handleAcceptRematch = () => {
+  // Accept a rematch with authentication
+  const handleAcceptRematch = async () => {
     if (!socket || !roomId) return;
-    socket.emit('accept-rematch', roomId);
-  };
-
-  const handleLeaveGame = () => {
-    localStorage.removeItem('gameRoom');
-    onGameEnd();
+    
+    // Include auth token if available
+    let authToken = null;
+    if (user) {
+      try {
+        authToken = await user.getIdToken(true);
+        socket.emit('accept-rematch', roomId, authToken);
+      } catch (err) {
+        console.error('Error getting auth token for rematch acceptance:', err);
+        socket.emit('accept-rematch', roomId);
+      }
+    } else {
+      socket.emit('accept-rematch', roomId);
+    }
   };
 
   return (
     <div className="flex flex-col items-center gap-8">
+      {/* Connection error alert */}
+      {connectionError && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{connectionError}</AlertDescription>
+        </Alert>
+      )}
+      
       {/* Coin Toss Animation */}
       <AnimatePresence>
         {coinTossing && (
@@ -480,7 +580,7 @@ export default function Board({
         </AnimatePresence>
       </div>
       
-      {/* Players Info */}
+      {/* Players Info with Authentication Status */}
       <div className="grid grid-cols-2 gap-8 w-full max-w-xl">
         {players && players.length > 0 ? (
           players.map(([id, player]) => (
@@ -509,8 +609,11 @@ export default function Board({
                 <div>
                   <p className="font-medium">{player.name}</p>
                   <p className="text-sm text-gray-500">Playing as {player.symbol}</p>
+                  {player.authenticated && (
+                    <p className="text-xs text-green-500">✓ Verified</p>
+                  )}
                   
-                  {/* Add timer indicator for current player */}
+                  {/* Timer indicator for current player */}
                   {boardState.currentPlayer === player.symbol && isTimerActive && (
                     <div className="mt-1 bg-gray-200 h-2 rounded-full overflow-hidden">
                       <motion.div
