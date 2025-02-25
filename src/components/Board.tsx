@@ -382,7 +382,7 @@ export default function Board({
     return null;
   };
 
-const handleClick = async (row: number, col: number) => {
+  const handleClick = async (row: number, col: number) => {
   if (!socket || !playerSymbol || !roomId) {
     console.log('Click blocked: No socket, symbol, or room', { socket: !!socket, playerSymbol, roomId });
     return;
@@ -393,11 +393,8 @@ const handleClick = async (row: number, col: number) => {
     return;
   }
 
-  if (boardState.cells[row][col].value || boardState.gameOver) {
-    console.log('Click blocked: Cell occupied or game over', { 
-      cellValue: boardState.cells[row][col].value, 
-      gameOver: boardState.gameOver 
-    });
+  if (boardState.gameOver) {
+    console.log('Click blocked: Game over', { gameOver: boardState.gameOver });
     return;
   }
 
@@ -434,13 +431,29 @@ const handleClick = async (row: number, col: number) => {
     const oldestMark = playerMarks[0];
     console.log("Oldest mark:", oldestMark);
     
-    // Remove the oldest mark - FIX: Ensure this cell is properly cleared
+    // Special handling if clicking on a cell that already has player's mark
+    if (newCells[row][col].value === playerSymbol) {
+      // Find the second oldest mark if we're clicking on the oldest
+      if (oldestMark.row === row && oldestMark.col === col) {
+        if (playerMarks.length > 1) {
+          oldestMark = playerMarks[1]; // Use second oldest mark
+        }
+      }
+    }
+    
+    // Remove the oldest mark
     if (oldestMark && oldestMark.row !== undefined && oldestMark.col !== undefined) {
       newCells[oldestMark.row][oldestMark.col] = { value: '', timestamp: null };
       console.log(`Removed mark at position [${oldestMark.row}, ${oldestMark.col}]`);
     }
   }
 
+  // Check if the cell is already occupied by opponent
+  if (newCells[row][col].value && newCells[row][col].value !== playerSymbol) {
+    console.log('Click blocked: Cell occupied by opponent', { cellValue: newCells[row][col].value });
+    return;
+  }
+  
   // Add the new mark with current timestamp
   newCells[row][col] = { value: playerSymbol, timestamp: currentTime };
   console.log(`Added new mark at [${row}, ${col}] with timestamp ${currentTime}`);
