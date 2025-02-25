@@ -382,66 +382,108 @@ export default function Board({
     return null;
   };
 
-  // Handle game clicks with proper validation
-  const handleClick = async (row: number, col: number) => {
-    if (!socket || !playerSymbol || !roomId) {
-      console.log('Click blocked: No socket, symbol, or room', { socket: !!socket, playerSymbol, roomId });
-      return;
-    }
+const handleClick = async (row: number, col: number) => {
+  if (!socket || !playerSymbol || !roomId) {
+    console.log('Click blocked: No socket, symbol, or room', { socket: !!socket, playerSymbol, roomId });
+    return;
+  }
 
-    if (playerSymbol !== boardState.currentPlayer) {
-      console.log('Click blocked: Not your turn', { playerSymbol, currentPlayer: boardState.currentPlayer });
-      return;
-    }
+  if (playerSymbol !== boardState.currentPlayer) {
+    console.log('Click blocked: Not your turn', { playerSymbol, currentPlayer: boardState.currentPlayer });
+    return;
+  }
 
-    if (boardState.cells[row][col].value || boardState.gameOver) {
-      console.log('Click blocked: Cell occupied or game over', { 
-        cellValue: boardState.cells[row][col].value, 
-        gameOver: boardState.gameOver 
-      });
-      return;
-    }
+  if (boardState.cells[row][col].value || boardState.gameOver) {
+    console.log('Click blocked: Cell occupied or game over', { 
+      cellValue: boardState.cells[row][col].value, 
+      gameOver: boardState.gameOver 
+    });
+    return;
+  }
 
-    // Create a deep copy of the cells array
-    const newCells = boardState.cells.map(r => r.map(c => ({ ...c })));
-    const currentMarks = countPlayerMarks(playerSymbol);
-
-    // If player already has 3 marks, remove oldest
-    if (currentMarks >= 3) {
-      const oldestMark = getOldestMark(playerSymbol);
-      if (oldestMark) {
-        newCells[oldestMark.row][oldestMark.col] = { value: '' };
+  // Create a deep copy of the cells array
+  const newCells = boardState.cells.map(r => r.map(c => ({ ...c })));
+  
+  // Get current timestamp for this move
+  const currentTime = Date.now();
+  
+  // Find player's marks with their positions and timestamps
+  const playerMarks = [];
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      if (newCells[i][j].value === playerSymbol) {
+        playerMarks.push({
+          row: i,
+          col: j,
+          timestamp: newCells[i][j].timestamp || currentTime - 999999 // Default old timestamp if missing
+        });
       }
     }
-
-    // Add new mark
-    newCells[row][col] = { value: playerSymbol, timestamp: Date.now() };
+  }
+  
+  console.log("Player marks before new move:", playerMarks);
+  
+  // If player already has 3 marks, find and remove the oldest
+  if (playerMarks.length >= 3) {
+    console.log("Player has 3+ marks, removing oldest");
     
-    // Check for winner
-    const winner = checkWinner(newCells);
+    // Sort by timestamp (ascending order - oldest first)
+    playerMarks.sort((a, b) => {
+      const aTime = a.timestamp || 0;
+      const bTime = b.timestamp || 0;
+      return aTime - bTime;
+    });
     
-    // Create new state (server will handle switching current player)
-    const newState = {
-      cells: newCells,
-      currentPlayer: boardState.currentPlayer, // Keep the same, server will change
-      gameOver: !!winner,
-      winner
-    };
+    // Get the oldest mark
+    const oldestMark = playerMarks[0];
+    console.log("Oldest mark:", oldestMark);
+    
+    // Remove the oldest mark
+    if (oldestMark && oldestMark.row !== undefined && oldestMark.col !== undefined) {
+      newCells[oldestMark.row][oldestMark.col] = { value: '' };
+      console.log(`Removed mark at position [${oldestMark.row}, ${oldestMark.col}]`);
+    }
+  }
 
-    // Send move to server with authentication if available
-    let authToken = null;
-    if (user) {
-      try {
-        authToken = await user.getIdToken(true); // Force token refresh
-        socket.emit('make-move', { roomId, move: newState, token: authToken });
-      } catch (err) {
-        console.error('Error getting auth token for move:', err);
-        socket.emit('make-move', { roomId, move: newState });
-      }
-    } else {
+  // Add the new mark with current timestamp
+  newCells[row][col] = { value: playerSymbol, timestamp: currentTime };
+  console.log(`Added new mark at [${row}, ${col}] with timestamp ${currentTime}`);
+  
+  // Log the updated cell grid for debugging
+  console.log("Updated cells:", 
+    newCells.map(row => 
+      row.map(cell => 
+        cell.value ? `${cell.value}${cell.timestamp ? `(${cell.timestamp})` : ''}` : ''
+      )
+    )
+  );
+  
+  // Check for winner
+  const winner = checkWinner(newCells);
+  
+  // Create new state (server will handle switching current player)
+  const newState = {
+    cells: newCells,
+    currentPlayer: boardState.currentPlayer, // Keep the same, server will change
+    gameOver: !!winner,
+    winner
+  };
+
+  // Send move to server with authentication if available
+  let authToken = null;
+  if (user) {
+    try {
+      authToken = await user.getIdToken(true);
+      socket.emit('make-move', { roomId, move: newState, token: authToken });
+    } catch (err) {
+      console.error('Error getting auth token for move:', err);
       socket.emit('make-move', { roomId, move: newState });
     }
-  };
+  } else {
+    socket.emit('make-move', { roomId, move: newState });
+  }
+};
+  
 
   // Request a rematch with authentication
   const handleRematchRequest = async () => {
