@@ -14,7 +14,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Determine the socket URL based on the environment
     const socketUrl = 
-      import.meta.env.VITE_SOCKET_URL || 
+      import.meta.env.VITE_SOCKET_URL ||  
       'https://multi-tic-tac-toe-backend-31ac0fb8506a.herokuapp.com';
     
     console.log('Connecting to socket server at:', socketUrl);
