@@ -428,19 +428,15 @@ const handleClick = async (row: number, col: number) => {
     console.log("Player has 3+ marks, removing oldest");
     
     // Sort by timestamp (ascending order - oldest first)
-    playerMarks.sort((a, b) => {
-      const aTime = a.timestamp || 0;
-      const bTime = b.timestamp || 0;
-      return aTime - bTime;
-    });
+    playerMarks.sort((a, b) => a.timestamp - b.timestamp);
     
     // Get the oldest mark
     const oldestMark = playerMarks[0];
     console.log("Oldest mark:", oldestMark);
     
-    // Remove the oldest mark
+    // Remove the oldest mark - FIX: Ensure this cell is properly cleared
     if (oldestMark && oldestMark.row !== undefined && oldestMark.col !== undefined) {
-      newCells[oldestMark.row][oldestMark.col] = { value: '' };
+      newCells[oldestMark.row][oldestMark.col] = { value: '', timestamp: null };
       console.log(`Removed mark at position [${oldestMark.row}, ${oldestMark.col}]`);
     }
   }
